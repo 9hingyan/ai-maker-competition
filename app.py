@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-CAMPUS·东大 v0.2 —— AI 校园中枢（Web APP）
-技术栈：Python + Streamlit + OpenAI 兼容 API（DeepSeek 文本 / 智谱 GLM-4V 视觉）
+CAMPUS·东大 v0.3 —— AI 校园中枢（Web APP）
+技术栈：Python + Streamlit + OpenAI 兼容 API（千问 Qwen 文本 + 视觉）
 运行：streamlit run app.py
 """
 
@@ -106,14 +106,10 @@ LINKS = [
 ]
 
 # ============================ API 配置（可按需修改） ============================
-# DeepSeek：OpenAI 兼容，用于文本类任务（通知过滤）
-DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-DEEPSEEK_MODEL = "deepseek-chat"
-
-# 智谱 GLM-4V：OpenAI 兼容，用于视觉类任务（课表截图识别）
-# 若 DeepSeek 后续提供视觉模型，可在此把 base_url/model 换成 DeepSeek 的视觉模型
-ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
-ZHIPU_VISION_MODEL = "glm-4v-plus"
+# 千问（Qwen）· 阿里云百炼 DashScope：OpenAI 兼容，一个 Key 同时用于文本 + 视觉
+QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+QWEN_TEXT_MODEL = "qwen-plus"        # 文本：通知过滤
+QWEN_VISION_MODEL = "qwen-vl-plus"   # 视觉：课表截图识别
 
 # ============================ Prompt 模板 ============================
 SCHEDULE_VISION_PROMPT = """请识别这张课表截图，提取里面所有课程。对每门课提取：
@@ -314,14 +310,15 @@ def _resolve_key(sidebar_val: str, key_name: str) -> str:
     return os.environ.get(key_name, "").strip()
 
 
+@st.cache_data(show_spinner=False)
 def parse_schedule_image(image_bytes: bytes, mime_type: str, api_key: str) -> list:
-    """功能1：调用视觉模型（GLM-4V）识别课表截图，返回课程列表。"""
+    """功能1：调用视觉模型（Qwen-VL）识别课表截图，返回课程列表。"""
     from openai import OpenAI
 
-    client = OpenAI(api_key=api_key, base_url=ZHIPU_BASE_URL)
+    client = OpenAI(api_key=api_key, base_url=QWEN_BASE_URL)
     b64 = base64.b64encode(image_bytes).decode()
     resp = client.chat.completions.create(
-        model=ZHIPU_VISION_MODEL,
+        model=QWEN_VISION_MODEL,
         messages=[{
             "role": "user",
             "content": [
@@ -349,11 +346,12 @@ def parse_schedule_image(image_bytes: bytes, mime_type: str, api_key: str) -> li
     return courses
 
 
+@st.cache_data(show_spinner=False, ttl=3600)
 def filter_notices(notices: list, api_key: str) -> list:
-    """功能2：调用 DeepSeek 过滤通知，结合校历把「第X周」换算成具体日期。"""
+    """功能2：调用千问（Qwen）过滤通知，结合校历把「第X周」换算成具体日期。"""
     from openai import OpenAI
 
-    client = OpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL)
+    client = OpenAI(api_key=api_key, base_url=QWEN_BASE_URL)
     user_prompt = (
         "以下是本学年校历（周一为每周第一天）：\n"
         f"{_calendar_text()}\n\n"
@@ -362,7 +360,7 @@ def filter_notices(notices: list, api_key: str) -> list:
         "请逐条分析并输出结果。"
     )
     resp = client.chat.completions.create(
-        model=DEEPSEEK_MODEL,
+        model=QWEN_TEXT_MODEL,
         messages=[
             {"role": "system", "content": NOTICE_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -490,7 +488,7 @@ def _link_card(l) -> str:
 
 
 # ============================ 页面渲染 ============================
-def render_today_overview(uploaded_file, zhipu_key: str):
+def render_today_overview(uploaded_file, qwen_key: str):
     # ---- 课表截图导入流程（功能1） ----
     if uploaded_file is not None:
         st.markdown('<div class="section-title">课表截图导入</div>', unsafe_allow_html=True)
@@ -500,16 +498,16 @@ def render_today_overview(uploaded_file, zhipu_key: str):
         with c_act:
             st.caption(f"已上传：{uploaded_file.name}")
             if st.button("🔍 解析课表截图", type="primary"):
-                if not zhipu_key:
-                    st.warning("请先在侧边栏「🔑 API 配置」里填写智谱 API Key")
+                if not qwen_key:
+                    st.warning("请先在侧边栏「🔑 API 配置」里填写千问 API Key")
                 else:
                     with st.spinner("正在调用视觉模型识别课表…"):
                         try:
                             st.session_state["parsed_courses"] = parse_schedule_image(
-                                uploaded_file.getvalue(), uploaded_file.type, zhipu_key
+                                uploaded_file.getvalue(), uploaded_file.type, qwen_key
                             )
                         except Exception as e:
-                            st.error(f"识别失败：{e}")
+                            st.error(f"课表识别失败，请检查千问 API Key: {e}")
 
         if st.session_state.get("parsed_courses"):
             st.markdown("**识别结果（可直接点击单元格编辑，确认后导入）：**")
@@ -564,7 +562,7 @@ def render_today_overview(uploaded_file, zhipu_key: str):
         )
 
 
-def render_ai_briefing(deepseek_key: str):
+def render_ai_briefing(qwen_key: str):
     today = date.today()
     week, weekday = get_week_info(today)
     st.markdown(
@@ -576,14 +574,14 @@ def render_ai_briefing(deepseek_key: str):
     )
 
     if st.button("🔄 运行通知过滤引擎"):
-        if not deepseek_key:
-            st.warning("请先在侧边栏「🔑 API 配置」里填写 DeepSeek API Key")
+        if not qwen_key:
+            st.warning("请先在侧边栏「🔑 API 配置」里填写千问 API Key")
         else:
             with st.spinner("AI 正在阅读通知并过滤…"):
                 try:
-                    st.session_state["parsed_notices"] = filter_notices(MOCK_NOTICES, deepseek_key)
+                    st.session_state["parsed_notices"] = filter_notices(MOCK_NOTICES, qwen_key)
                 except Exception as e:
-                    st.error(f"调用失败：{e}")
+                    st.error(f"AI 处理失败，请检查千问 API Key: {e}")
 
     parsed = st.session_state.get("parsed_notices")
     if parsed is None:
@@ -631,15 +629,11 @@ with st.sidebar:
     st.divider()
 
     with st.expander("🔑 API 配置", expanded=False):
-        deepseek_input = st.text_input(
-            "DeepSeek API Key", type="password", key="deepseek_key_input",
-            help="用于「通知过滤」文本模型 deepseek-chat",
+        qwen_input = st.text_input(
+            "千问 API Key", type="password", key="qwen_key_input",
+            help="阿里云百炼 DashScope 的 API Key，文本 + 视觉共用一个",
         )
-        zhipu_input = st.text_input(
-            "智谱 API Key", type="password", key="zhipu_key_input",
-            help="用于「课表截图识别」视觉模型 glm-4v-plus",
-        )
-        st.caption("也可通过环境变量或 .streamlit/secrets.toml 配置（键名同上）")
+        st.caption("也可通过环境变量或 .streamlit/secrets.toml 配置（键名 DASHSCOPE_API_KEY）")
 
     st.divider()
     uploaded_file = st.file_uploader(
@@ -647,19 +641,18 @@ with st.sidebar:
         key="schedule_uploader", help="上传后到「今日总览」页点击解析",
     )
 
-    st.markdown('<div class="sidebar-foot">v0.2 · 支持 AI 解析</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-foot">v0.3 · 千问 AI 解析</div>', unsafe_allow_html=True)
 
-deepseek_key = _resolve_key(deepseek_input, "DEEPSEEK_API_KEY")
-zhipu_key = _resolve_key(zhipu_input, "ZHIPU_API_KEY")
+qwen_key = _resolve_key(qwen_input, "DASHSCOPE_API_KEY")
 
 # ============================ 主界面：顶部 Tab 导航 ============================
 tab_overview, tab_briefing, tab_links = st.tabs(["今日总览", "AI行动简报", "网站导航"])
 
 with tab_overview:
-    render_today_overview(uploaded_file, zhipu_key)
+    render_today_overview(uploaded_file, qwen_key)
 
 with tab_briefing:
-    render_ai_briefing(deepseek_key)
+    render_ai_briefing(qwen_key)
 
 with tab_links:
     render_links()
