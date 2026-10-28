@@ -9,7 +9,7 @@ import os
 import json
 import re
 import base64
-from datetime import date
+from datetime import date, datetime
 
 import streamlit as st
 import pandas as pd
@@ -51,8 +51,16 @@ SRTP_DEADLINE = date(2026, 11, 1)   # 第 8 周周日：SRTP 申报截止
 
 # ============================ 数据：默认课表（未导入前的兜底） ============================
 COURSES = [
-    {"name": "高等数学 A（一）", "time": "08:00 - 09:40", "location": "教一 205", "tag": "周一 · 第 1-2 节"},
-    {"name": "工科导论",       "time": "14:00 - 15:40", "location": "教三 402", "tag": "周三 · 第 6-7 节"},
+    {
+        "name": "高等数学 A（一）", "time": "08:00 - 09:40", "location": "教一 205",
+        "tag": "周一 · 第 1-2 节", "weekday": "周一", "start_week": 1, "end_week": 16,
+        "week_type": "每周", "periods": "1-2",
+    },
+    {
+        "name": "工科导论", "time": "14:00 - 15:40", "location": "教三 402",
+        "tag": "周三 · 第 6-7 节", "weekday": "周三", "start_week": 1, "end_week": 16,
+        "week_type": "每周", "periods": "6-7",
+    },
 ]
 
 # ============================ 数据：模拟官网通知（第一版先跑通接口，不写爬虫） ============================
@@ -116,13 +124,17 @@ SCHEDULE_VISION_PROMPT = """请识别这张课表截图，提取里面所有课�
 - name：课程名
 - time：上课时间（如 08:00 - 09:40）
 - location：上课地点（如 教一 205）
-- tag：节次/周次说明（如 周一·第1-2节）
+- weekday：星期，只能是「周一」到「周日」之一
+- periods：节次（如 1-2、3-4、6-7）
+- start_week：开始周，整数
+- end_week：结束周，整数
+- week_type：周次类型，只能是「每周」「单周」「双周」之一
 
 严格只输出一个 JSON 数组，不要输出任何解释文字、不要用 markdown 代码块。示例：
 [
-  {"name": "高等数学A", "time": "08:00 - 09:40", "location": "教一 205", "tag": "周一·第1-2节"}
+  {"name": "高等数学A", "time": "08:00 - 09:40", "location": "教一 205", "weekday": "周一", "periods": "1-2", "start_week": 1, "end_week": 16, "week_type": "每周"}
 ]
-识别不到某项就填空字符串 ""。不要遗漏任何课程。"""
+无法判断周次时，start_week 填 1、end_week 填 16、week_type 填「每周」。识别不到其他某项就填 ""。不要遗漏任何课程。"""
 
 NOTICE_SYSTEM_PROMPT = """你是「CAMPUS·东大」的通知过滤助手。请阅读给定的官网通知列表，完成两件事：
 
@@ -152,16 +164,16 @@ st.markdown(
     """
     <style>
     :root {
-        --bg: #F7F7F5;
+        --bg: #F3F5F9;
         --card: #FFFFFF;
-        --text: #37352F;
-        --muted: #787774;
-        --border: #E9E9E7;
-        --accent: #37352F;
-        --red: #D93025;
-        --red-bg: #FBECEC;
-        --yellow: #9A6700;
-        --yellow-bg: #FBF1D9;
+        --text: #23293A;
+        --muted: #7B849B;
+        --border: #E6EAF2;
+        --accent: #4D68D8;
+        --red: #D64A58;
+        --red-bg: #FFF0F1;
+        --yellow: #9A6A13;
+        --yellow-bg: #FFF6DF;
     }
     html, body, .stApp, [data-testid="stAppViewContainer"] {
         background-color: var(--bg);
@@ -175,12 +187,17 @@ st.markdown(
     footer { visibility: hidden; }
     [data-testid="stToolbar"] { visibility: hidden; }
     [data-testid="stDecoration"] { display: none; }
+    [data-testid="stHeader"] { background: transparent; }
 
     section[data-testid="stSidebar"] {
-        background-color: #FBFBFA;
+        background-color: #F8FAFD;
         border-right: 1px solid var(--border);
+        width: 248px !important;
+        min-width: 248px !important;
+        max-width: 248px !important;
     }
-    .block-container { padding-top: 2rem; padding-bottom: 2rem; max-width: 1100px; }
+    section[data-testid="stSidebar"] > div { padding-top: 1.25rem; }
+    .block-container { padding: 1.9rem 2.25rem 2.5rem; max-width: 1180px; }
 
     /* 顶部 Tab 导航 */
     [data-testid="stTabs"] [data-baseweb="tab-list"] {
@@ -219,11 +236,111 @@ st.markdown(
     .progress-track { width: 100%; height: 6px; background: #EFEFEC; border-radius: 999px; overflow: hidden; margin: 8px 0 12px 0; }
     .progress-fill  { height: 100%; background: var(--accent); border-radius: 999px; }
 
-    .week-list { display: flex; flex-direction: column; gap: 2px; }
-    .week-row  { display: flex; justify-content: space-between; align-items: center; padding: 5px 8px; border-radius: 6px; font-size: 0.8rem; }
-    .week-row.active { background: #ECECEA; }
-    .week-row.active .week-num { font-weight: 700; }
-    .week-date { color: var(--muted); font-size: 0.74rem; }
+    .st-key-week_picker button {
+        min-height: 2rem; padding: 0.25rem 0.55rem; border-radius: 6px;
+        font-size: 0.78rem; justify-content: flex-start;
+    }
+    .st-key-week_picker button p { width: 100%; text-align: left; }
+
+    .dashboard-brand {
+        display: flex; align-items: center; gap: 10px; padding: 0 4px 18px;
+    }
+    .brand-mark {
+        width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+        color: white; font-size: 1rem; font-weight: 800;
+        background: linear-gradient(135deg, #8264E8 0%, #4169D8 100%);
+        box-shadow: 0 7px 16px rgba(77, 104, 216, 0.22);
+    }
+    .brand-name { font-size: 1.02rem; font-weight: 750; color: var(--text); }
+    .brand-sub { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+
+    .st-key-nav_menu button {
+        justify-content: flex-start; text-align: left; min-height: 2.55rem;
+        border: 0; border-radius: 9px; background: transparent;
+        color: #5C667C; font-size: 0.88rem; padding: 0.45rem 0.75rem;
+        box-shadow: none;
+    }
+    .st-key-nav_menu button p { text-align: left; }
+    .st-key-nav_menu button:hover {
+        background: #EEF2F9; color: var(--text); border: 0;
+    }
+    .st-key-nav_menu button[kind="primary"] {
+        background: #E9EEFF; color: #365BCB; font-weight: 650;
+        box-shadow: inset 3px 0 0 #4D68D8;
+    }
+
+    .main-kicker { color: var(--muted); font-size: 0.83rem; margin-bottom: 4px; }
+    .dashboard-hero {
+        display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px;
+        align-items: stretch; margin-bottom: 18px;
+    }
+    .hero-copy {
+        background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+        padding: 22px 24px; box-shadow: 0 3px 16px rgba(41, 52, 84, 0.045);
+    }
+    .hero-greeting { color: #737D93; font-size: 0.86rem; }
+    .hero-date { color: var(--text); font-size: 1.75rem; line-height: 1.25; font-weight: 760; margin: 5px 0 8px; }
+    .hero-meta { color: var(--muted); font-size: 0.8rem; }
+    .hero-meta strong { color: #4D68D8; font-weight: 650; }
+    .next-class {
+        background: linear-gradient(135deg, #F7F9FF 0%, #EFF3FF 100%);
+        border: 1px solid #E0E6FA; border-radius: 14px; padding: 18px 20px;
+        box-shadow: 0 3px 16px rgba(41, 52, 84, 0.04);
+    }
+    .next-label { color: #7B85A0; font-size: 0.74rem; margin-bottom: 10px; }
+    .next-name { color: #2F3A57; font-size: 1rem; font-weight: 700; }
+    .next-meta { color: #7D87A1; font-size: 0.75rem; margin-top: 6px; line-height: 1.5; }
+
+    .st-key-quick_schedule button, .st-key-quick_ai button, .st-key-quick_links button {
+        min-height: 4.6rem; justify-content: flex-start; text-align: left;
+        background: var(--card); border: 1px solid var(--border); border-radius: 11px;
+        color: #47516A; padding: 0.7rem 0.9rem; box-shadow: 0 3px 14px rgba(41, 52, 84, 0.035);
+    }
+    .st-key-quick_schedule button:hover, .st-key-quick_ai button:hover, .st-key-quick_links button:hover {
+        border-color: #C8D2F6; background: #FAFBFF;
+    }
+    .st-key-quick_schedule button p, .st-key-quick_ai button p, .st-key-quick_links button p {
+        text-align: left; white-space: pre-line; line-height: 1.5;
+    }
+
+    .panel {
+        background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+        padding: 18px 20px; box-shadow: 0 3px 16px rgba(41, 52, 84, 0.04);
+        margin-bottom: 16px;
+    }
+    .panel-head {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 10px;
+    }
+    .panel-title { color: var(--text); font-size: 0.95rem; font-weight: 700; }
+    .panel-meta { color: var(--muted); font-size: 0.75rem; }
+    .course-row {
+        display: grid; grid-template-columns: 58px 3px minmax(0, 1fr) auto;
+        gap: 14px; align-items: center; padding: 14px 4px;
+        border-top: 1px solid #EFF2F7;
+    }
+    .course-row:first-of-type { border-top: 0; }
+    .course-clock { text-align: right; color: #5F6980; line-height: 1.45; font-size: 0.76rem; }
+    .course-clock strong { display: block; font-weight: 650; color: #3A4358; }
+    .course-line { width: 3px; height: 34px; border-radius: 99px; background: #4D68D8; }
+    .crow-name { color: #2C3448; font-size: 0.94rem; font-weight: 680; }
+    .crow-meta { color: var(--muted); font-size: 0.75rem; margin-top: 4px; }
+    .crow-day {
+        color: #54617E; font-size: 0.73rem; background: #F2F5FB;
+        border-radius: 999px; padding: 4px 9px; white-space: nowrap;
+    }
+    .empty-card {
+        background: linear-gradient(180deg, #FBFCFE 0%, #F7F9FD 100%);
+        border: 1px dashed #DCE2ED; border-radius: 14px; min-height: 150px;
+        display: grid; place-items: center; text-align: center; padding: 24px;
+        color: #7D879C; margin-bottom: 16px;
+    }
+    .empty-icon {
+        width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+        background: #F0F3F9; margin: 0 auto 9px; color: #9BA4B7;
+    }
+    .empty-title { color: #59637A; font-size: 0.88rem; font-weight: 650; }
+    .empty-copy { color: #98A0B1; font-size: 0.76rem; margin-top: 5px; }
 
     .course-card {
         display: flex; justify-content: space-between; align-items: center;
@@ -258,6 +375,10 @@ st.markdown(
     .link-name { font-weight: 600; font-size: 0.95rem; color: var(--text); }
     .link-desc { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
 
+    .day-label {
+        font-size: 0.82rem; font-weight: 700; color: var(--muted);
+        letter-spacing: 0.03em; margin: 14px 0 7px;
+    }
     .muted-note { color: var(--muted); font-size: 0.85rem; }
     </style>
     """,
@@ -335,15 +456,7 @@ def parse_schedule_image(image_bytes: bytes, mime_type: str, api_key: str) -> li
     if not isinstance(data, list):
         raise ValueError("模型未返回课表数组")
 
-    courses = []
-    for item in data:
-        courses.append({
-            "name": str(item.get("name", "") or "").strip(),
-            "time": str(item.get("time", "") or "").strip(),
-            "location": str(item.get("location", "") or "").strip(),
-            "tag": str(item.get("tag", "") or "").strip(),
-        })
-    return courses
+    return [_normalize_course(item) for item in data if isinstance(item, dict)]
 
 
 @st.cache_data(show_spinner=False, ttl=3600)
@@ -384,6 +497,202 @@ def _clean(v) -> str:
     except (TypeError, ValueError):
         pass
     return str(v).strip()
+
+
+def _to_int(value, default: int) -> int:
+    """把模型或表格中的周次转成整数，无法识别时使用兜底值。"""
+    try:
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        match = re.search(r"\d+", str(value or ""))
+        return int(match.group()) if match else default
+
+
+def _normalize_weekday(value, tag: str = "") -> str:
+    """兼容「周一」「星期一」「1」等写法，统一为 WEEKDAYS_CN。"""
+    text = f"{_clean(value)} {_clean(tag)}"
+    aliases = {
+        "周一": ("周一", "星期一"), "周二": ("周二", "星期二"),
+        "周三": ("周三", "星期三"), "周四": ("周四", "星期四"),
+        "周五": ("周五", "星期五"), "周六": ("周六", "星期六"),
+        "周日": ("周日", "周天", "星期日", "星期天"),
+    }
+    for weekday, names in aliases.items():
+        if any(name in text for name in names):
+            return weekday
+    try:
+        number = _to_int(value, 0)
+        if 1 <= number <= 7:
+            return WEEKDAYS_CN[number - 1]
+    except (TypeError, ValueError):
+        pass
+    return ""
+
+
+def _normalize_week_type(value) -> str:
+    text = _clean(value)
+    if "单" in text:
+        return "单周"
+    if "双" in text:
+        return "双周"
+    return "每周"
+
+
+def _infer_periods(tag: str) -> str:
+    match = re.search(r"第\s*(\d+)\s*[-~至到]\s*(\d+)\s*节", _clean(tag))
+    if match:
+        return f"{match.group(1)}-{match.group(2)}"
+    match = re.search(r"第\s*(\d+)\s*节", _clean(tag))
+    return match.group(1) if match else ""
+
+
+def _normalize_course(item: dict) -> dict:
+    """统一截图模型、表格编辑器和旧版默认课表的数据结构。"""
+    tag = _clean(item.get("tag") or item.get("周次/节次") or "")
+    weekday = _normalize_weekday(item.get("weekday") or item.get("星期"), tag)
+    periods = _clean(item.get("periods") or item.get("节次")) or _infer_periods(tag)
+    start_week = _to_int(
+        item.get("start_week", item.get("起始周")), 1
+    )
+    end_week = _to_int(
+        item.get("end_week", item.get("结束周")), TOTAL_WEEKS
+    )
+    start_week = min(max(start_week, 1), TOTAL_WEEKS)
+    end_week = min(max(end_week, 1), TOTAL_WEEKS)
+    if start_week > end_week:
+        start_week, end_week = end_week, start_week
+
+    if not tag and weekday:
+        period_text = f" · 第 {periods} 节" if periods else ""
+        tag = f"{weekday}{period_text}"
+    return {
+        "name": _clean(item.get("name") or item.get("课程名")),
+        "time": _clean(item.get("time") or item.get("上课时间")),
+        "location": _clean(item.get("location") or item.get("地点")),
+        "tag": tag,
+        "weekday": weekday,
+        "start_week": start_week,
+        "end_week": end_week,
+        "week_type": _normalize_week_type(item.get("week_type") or item.get("周次类型")),
+        "periods": periods,
+    }
+
+
+def _course_occurs_in_week(course: dict, week: int) -> bool:
+    start_week = _to_int(course.get("start_week"), 1)
+    end_week = _to_int(course.get("end_week"), TOTAL_WEEKS)
+    if not start_week <= week <= end_week:
+        return False
+    week_type = _normalize_week_type(course.get("week_type"))
+    if week_type == "单周":
+        return week % 2 == 1
+    if week_type == "双周":
+        return week % 2 == 0
+    return True
+
+
+def _courses_for_week(courses: list, week: int) -> list:
+    filtered = [
+        _normalize_course(course)
+        for course in courses
+        if _course_occurs_in_week(course, week)
+    ]
+
+    def sort_key(course: dict):
+        weekday = _normalize_weekday(course.get("weekday"), course.get("tag", ""))
+        day_index = WEEKDAYS_CN.index(weekday) if weekday in WEEKDAYS_CN else 99
+        period_match = re.search(r"\d+", _clean(course.get("periods")))
+        period_index = int(period_match.group()) if period_match else 999
+        return day_index, period_index, course.get("time", "")
+
+    return sorted(filtered, key=sort_key)
+
+
+def _greeting_text(now: datetime) -> str:
+    if now.hour < 6:
+        return "夜深了"
+    if now.hour < 11:
+        return "上午好"
+    if now.hour < 14:
+        return "中午好"
+    if now.hour < 18:
+        return "下午好"
+    return "晚上好"
+
+
+def _next_course(courses: list, selected_week: int, now: datetime):
+    """优先返回今天尚未开始的课程，其次返回本周接下来的课程。"""
+    if not courses:
+        return None
+    current_week, _ = get_week_info(now.date())
+    if selected_week != current_week:
+        return courses[0]
+
+    today_name = WEEKDAYS_CN[now.weekday()]
+    now_minutes = now.hour * 60 + now.minute
+
+    def start_minutes(course):
+        match = re.search(r"(\d{1,2}):(\d{2})", _clean(course.get("time")))
+        return int(match.group(1)) * 60 + int(match.group(2)) if match else 24 * 60
+
+    today_courses = [c for c in courses if c.get("weekday") == today_name]
+    later_today = [c for c in today_courses if start_minutes(c) >= now_minutes]
+    if later_today:
+        return min(later_today, key=start_minutes)
+
+    today_index = now.weekday()
+    later_week = [
+        c for c in courses
+        if c.get("weekday") in WEEKDAYS_CN
+        and WEEKDAYS_CN.index(c["weekday"]) > today_index
+    ]
+    return later_week[0] if later_week else courses[0]
+
+
+def _course_time_parts(course: dict) -> tuple:
+    times = re.findall(r"\d{1,2}:\d{2}", _clean(course.get("time")))
+    if len(times) >= 2:
+        return times[0], times[1]
+    return (times[0], "") if times else ("--:--", "")
+
+
+def _set_nav(view: str) -> None:
+    st.session_state["nav_view"] = view
+
+
+def _render_dashboard_header(today: date, week, weekday: str, selected_week: int) -> None:
+    courses = _courses_for_week(st.session_state.get("courses", COURSES), selected_week)
+    next_course = _next_course(courses, selected_week, datetime.now())
+    week_text = f"第 {week} 教学周" if week else "假期中"
+    next_html = """
+        <div class="next-label">下一节课</div>
+        <div class="next-name">暂无课程</div>
+        <div class="next-meta">可以切换左侧周次查看其他安排</div>
+    """
+    if next_course:
+        next_html = f"""
+            <div class="next-label">下一节课 · 第 {selected_week} 周</div>
+            <div class="next-name">{next_course.get('name', '')}</div>
+            <div class="next-meta">{next_course.get('weekday', '')} · {next_course.get('time', '')}<br>{next_course.get('location', '')}</div>
+        """
+    st.markdown(
+        f"""
+        <div class="dashboard-hero">
+            <div class="hero-copy">
+                <div class="main-kicker">{_greeting_text(datetime.now())}，同学</div>
+                <div class="hero-date">{today.year}年{today.month}月{today.day}日 · {weekday}</div>
+                <div class="hero-meta">2026–2027 学年第一学期　<strong>{week_text} · 共 {TOTAL_WEEKS} 周</strong></div>
+            </div>
+            <div class="next-class">{next_html}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _map_notice(p: dict, original_by_id: dict) -> dict:
@@ -433,31 +742,50 @@ def _countdown_card(today: date, week, weekday: str) -> str:
     """
 
 
-def _calendar_list(current_week) -> str:
-    rows = []
-    for week, (start, end) in CALENDAR.items():
-        s, e = date.fromisoformat(start), date.fromisoformat(end)
-        active = " active" if week == current_week else ""
-        rows.append(
-            f'<div class="week-row{active}">'
-            f'<span class="week-num">第 {week} 周</span>'
-            f'<span class="week-date">{s.month}/{s.day} - {e.month}/{e.day}</span>'
-            f'</div>'
-        )
-    return '<div class="week-list">' + "".join(rows) + "</div>"
+def _set_selected_week(week: int) -> None:
+    st.session_state["selected_week"] = week
+
+
+def _render_week_picker(selected_week: int) -> None:
+    """渲染可点击的周次列表，点击后直接切换右侧课表。"""
+    with st.container(key="week_picker", gap="small"):
+        for week, (start, end) in CALENDAR.items():
+            s, e = date.fromisoformat(start), date.fromisoformat(end)
+            label = f"第 {week} 周  ·  {s.month}/{s.day}–{e.month}/{e.day}"
+            st.button(
+                label,
+                key=f"select_week_{week}",
+                type="primary" if week == selected_week else "secondary",
+                use_container_width=True,
+                on_click=_set_selected_week,
+                args=(week,),
+            )
 
 
 def _course_card(c) -> str:
+    start, end = _course_time_parts(c)
+    day_colors = {
+        "周一": "#4D68D8", "周二": "#4EA6D8", "周三": "#8B5FD3",
+        "周四": "#D75F96", "周五": "#E07A3F", "周六": "#37A37A", "周日": "#73819E",
+    }
+    color = day_colors.get(c.get("weekday"), "#4D68D8")
+    week_text = (
+        f"{c.get('start_week', 1)}–{c.get('end_week', TOTAL_WEEKS)} 周"
+        if c.get("week_type", "每周") == "每周"
+        else f"{c.get('start_week', 1)}–{c.get('end_week', TOTAL_WEEKS)} 周 · {c.get('week_type')}"
+    )
     return f"""
-    <div class="course-card">
-        <div class="course-left">
-            <div class="course-name">{c['name']}</div>
-            <div class="course-meta">
-                <span>🕐 {c['time']}</span>
-                <span>📍 {c['location']}</span>
+    <div class="course-row">
+        <div class="course-clock"><strong>{start}</strong>{end}</div>
+        <div class="course-line" style="background:{color}"></div>
+        <div>
+            <div class="crow-name">
+                <span style="display:inline-block;width:7px;height:7px;border-radius:50%;
+                             background:{color};margin-right:8px;vertical-align:middle;"></span>{c.get('name', '')}
             </div>
+            <div class="crow-meta">{c.get('location', '地点待定')}　·　第 {c.get('periods', '?')} 节　·　{week_text}</div>
         </div>
-        <div class="course-tag">{c['tag']}</div>
+        <div class="crow-day">{c.get('weekday', '')}</div>
     </div>
     """
 
@@ -511,15 +839,47 @@ def render_today_overview(uploaded_file, qwen_key: str):
 
         if st.session_state.get("parsed_courses"):
             st.markdown("**识别结果（可直接点击单元格编辑，确认后导入）：**")
-            df = pd.DataFrame(st.session_state["parsed_courses"])
-            edited = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+            editor_rows = [
+                {
+                    "课程名": course.get("name", ""),
+                    "星期": course.get("weekday", ""),
+                    "上课时间": course.get("time", ""),
+                    "地点": course.get("location", ""),
+                    "节次": course.get("periods", ""),
+                    "起始周": course.get("start_week", 1),
+                    "结束周": course.get("end_week", TOTAL_WEEKS),
+                    "周次类型": course.get("week_type", "每周"),
+                }
+                for course in st.session_state["parsed_courses"]
+            ]
+            df = pd.DataFrame(editor_rows)
+            edited = st.data_editor(
+                df,
+                num_rows="dynamic",
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "星期": st.column_config.SelectboxColumn(
+                        "星期", options=WEEKDAYS_CN, required=True
+                    ),
+                    "起始周": st.column_config.NumberColumn(
+                        "起始周", min_value=1, max_value=TOTAL_WEEKS, step=1
+                    ),
+                    "结束周": st.column_config.NumberColumn(
+                        "结束周", min_value=1, max_value=TOTAL_WEEKS, step=1
+                    ),
+                    "周次类型": st.column_config.SelectboxColumn(
+                        "周次类型", options=["每周", "单周", "双周"], required=True
+                    ),
+                },
+            )
             b1, b2, _ = st.columns([1, 1, 4])
             with b1:
                 if st.button("✅ 确认导入"):
                     st.session_state["courses"] = [
-                        {"name": _clean(r.get("name")), "time": _clean(r.get("time")),
-                         "location": _clean(r.get("location")), "tag": _clean(r.get("tag"))}
+                        _normalize_course(r)
                         for r in edited.to_dict("records")
+                        if _clean(r.get("课程名"))
                     ]
                     st.session_state.pop("parsed_courses", None)
                     st.session_state.pop("schedule_uploader", None)
@@ -534,30 +894,95 @@ def render_today_overview(uploaded_file, qwen_key: str):
     today = date.today()
     week, weekday = get_week_info(today)
 
-    st.markdown(_countdown_card(today, week, weekday), unsafe_allow_html=True)
+    default_week = week or 1
+    st.session_state.setdefault("selected_week", default_week)
+    selected_week = int(st.session_state["selected_week"])
+    if selected_week not in CALENDAR:
+        selected_week = default_week
+        st.session_state["selected_week"] = selected_week
 
-    col_left, col_right = st.columns([2, 8], gap="medium")
+    _render_dashboard_header(today, week, weekday, selected_week)
 
-    with col_left:
-        st.markdown('<div class="section-title">校历时间推演</div>', unsafe_allow_html=True)
-        progress = (week / TOTAL_WEEKS) if week else 0.0
+    quick_a, quick_b, quick_c = st.columns(3, gap="small")
+    with quick_a:
+        with st.container(key="quick_schedule"):
+            st.button(
+                "📚  周课表\n点击左侧教学周即可查看",
+                use_container_width=True,
+                on_click=_set_nav,
+                args=("today",),
+            )
+    with quick_b:
+        with st.container(key="quick_ai"):
+            st.button(
+                "✨  AI 行动简报\n过滤校园通知并生成提醒",
+                use_container_width=True,
+                on_click=_set_nav,
+                args=("ai",),
+            )
+    with quick_c:
+        with st.container(key="quick_links"):
+            st.button(
+                "🌐  校园服务\n教务、办事大厅与常用入口",
+                use_container_width=True,
+                on_click=_set_nav,
+                args=("links",),
+            )
+
+    all_courses = st.session_state["courses"]
+    courses = _courses_for_week(all_courses, selected_week)
+    source_note = "AI 解析导入" if all_courses != COURSES else "默认示例课表"
+    if courses:
+        course_rows = "".join(_course_card(course) for course in courses)
+    else:
+        course_rows = """
+            <div class="empty-card" style="margin-top:8px;">
+                <div><div class="empty-icon">✓</div>
+                <div class="empty-title">这一周没有课程</div>
+                <div class="empty-copy">切换左侧其他教学周查看安排</div></div>
+            </div>
+        """
+
+    week_rail, course_main = st.columns([2, 8], gap="medium")
+    with week_rail:
+        st.markdown(
+            '<div class="section-title" style="margin:6px 0 8px;">教学周</div>',
+            unsafe_allow_html=True,
+        )
+        _render_week_picker(selected_week)
+    with course_main:
         st.markdown(
             f"""
-            <div style="font-size:0.85rem; color: var(--muted);">学期进度：{week if week else '-'} / {TOTAL_WEEKS} 周</div>
-            <div class="progress-track"><div class="progress-fill" style="width:{int(progress * 100)}%"></div></div>
+            <div class="panel">
+                <div class="panel-head">
+                    <div class="panel-title">第 {selected_week} 周课程　<span class="panel-meta">{len(courses)}</span></div>
+                    <div class="panel-meta">{source_note}</div>
+                </div>
+                {course_rows}
+            </div>
             """,
             unsafe_allow_html=True,
         )
-        st.markdown(_calendar_list(week), unsafe_allow_html=True)
 
-    with col_right:
-        st.markdown('<div class="section-title">今日课表</div>', unsafe_allow_html=True)
-        courses = st.session_state["courses"]
-        for c in courses:
-            st.markdown(_course_card(c), unsafe_allow_html=True)
+    bottom_a, bottom_b = st.columns(2, gap="medium")
+    with bottom_a:
         st.markdown(
-            f'<div class="muted-note">💡 今日共 {len(courses)} 节课 · '
-            f'{"来自 AI 解析导入" if courses != COURSES else "默认示例数据，可在左侧上传课表截图导入"}</div>',
+            """
+            <div class="panel" style="min-height:150px;">
+                <div class="panel-head"><div class="panel-title">AI 行动简报</div><div class="panel-meta">6 条待处理</div></div>
+                <div class="muted-note">结合校历过滤校园通知，把「第 X 周」换算成明确截止日期。</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with bottom_b:
+        st.markdown(
+            """
+            <div class="panel" style="min-height:150px;">
+                <div class="panel-head"><div class="panel-title">校园服务</div><div class="panel-meta">快捷入口</div></div>
+                <div class="muted-note">教务处、办事大厅、图书馆和校园网服务都集中在这里。</div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
@@ -623,36 +1048,81 @@ def render_links():
 
 
 # ============================ 侧边栏 ============================
-with st.sidebar:
-    st.markdown('<div class="sidebar-logo">🎓 CAMPUS·东大</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sidebar-sub">东南大学 · AI 校园中枢</div>', unsafe_allow_html=True)
-    st.divider()
+today = date.today()
+current_week, current_weekday = get_week_info(today)
+default_week = current_week or 1
+st.session_state.setdefault("selected_week", default_week)
+selected_week = int(st.session_state["selected_week"])
+if selected_week not in CALENDAR:
+    selected_week = default_week
+    st.session_state["selected_week"] = selected_week
 
-    with st.expander("🔑 API 配置", expanded=False):
+st.session_state.setdefault("nav_view", "today")
+nav_view = st.session_state["nav_view"]
+
+with st.sidebar:
+    st.markdown(
+        """
+        <div class="dashboard-brand">
+            <div class="brand-mark">学</div>
+            <div><div class="brand-name">CAMPUS</div><div class="brand-sub">东南大学 · 校园中枢</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.container(key="nav_menu", gap="small"):
+        for icon, label, view in [
+            ("🏠", "今日", "today"),
+            ("✨", "AI 行动简报", "ai"),
+            ("🌐", "网站导航", "links"),
+            ("⚙️", "设置与导入", "settings"),
+        ]:
+            st.button(
+                f"{icon}　{label}",
+                key=f"nav_{view}",
+                type="primary" if nav_view == view else "secondary",
+                use_container_width=True,
+                on_click=_set_nav,
+                args=(view,),
+            )
+
+    st.divider()
+    with st.expander("🔑 API 配置与课表导入", expanded=False):
         qwen_input = st.text_input(
             "千问 API Key", type="password", key="qwen_key_input",
             help="阿里云百炼 DashScope 的 API Key，文本 + 视觉共用一个",
         )
         st.caption("也可通过环境变量或 .streamlit/secrets.toml 配置（键名 DASHSCOPE_API_KEY）")
+        uploaded_file = st.file_uploader(
+            "📤 上传课表截图", type=["png", "jpg", "jpeg", "webp"],
+            key="schedule_uploader", help="上传后到「今日」页点击解析",
+        )
 
-    st.divider()
-    uploaded_file = st.file_uploader(
-        "📤 上传课表截图", type=["png", "jpg", "jpeg", "webp"],
-        key="schedule_uploader", help="上传后到「今日总览」页点击解析",
+    st.markdown(
+        '<div class="sidebar-foot">v0.3 · 千问 AI 解析</div>',
+        unsafe_allow_html=True,
     )
-
-    st.markdown('<div class="sidebar-foot">v0.3 · 千问 AI 解析</div>', unsafe_allow_html=True)
 
 qwen_key = _resolve_key(qwen_input, "DASHSCOPE_API_KEY")
 
-# ============================ 主界面：顶部 Tab 导航 ============================
-tab_overview, tab_briefing, tab_links = st.tabs(["今日总览", "AI行动简报", "网站导航"])
-
-with tab_overview:
+# ============================ 主界面 ============================
+if nav_view == "today":
     render_today_overview(uploaded_file, qwen_key)
-
-with tab_briefing:
+elif nav_view == "ai":
     render_ai_briefing(qwen_key)
-
-with tab_links:
+elif nav_view == "links":
     render_links()
+else:
+    st.markdown(
+        """
+        <div class="panel">
+            <div class="panel-head"><div class="panel-title">设置与导入</div><div class="panel-meta">本地数据</div></div>
+            <div class="muted-note">
+                API Key 与课表截图上传位于左侧折叠面板。密钥只保存在当前 Streamlit 会话中；
+                也可以通过环境变量或 .streamlit/secrets.toml 配置。
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
