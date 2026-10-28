@@ -380,6 +380,165 @@ st.markdown(
         letter-spacing: 0.03em; margin: 14px 0 7px;
     }
     .muted-note { color: var(--muted); font-size: 0.85rem; }
+
+    /* 简洁工作台：减少卡片、阴影和强调色 */
+    :root {
+        --bg: #F7F7F8;
+        --card: #FFFFFF;
+        --text: #1F2328;
+        --muted: #6F7782;
+        --border: #E6E8EB;
+        --accent: #4B63D8;
+    }
+    html, body, .stApp, [data-testid="stAppViewContainer"] {
+        background: var(--bg);
+    }
+    .block-container {
+        max-width: 1080px;
+        padding: 2rem 2.2rem 3rem;
+    }
+    section[data-testid="stSidebar"] {
+        width: 228px !important;
+        min-width: 228px !important;
+        max-width: 228px !important;
+        background: #FBFBFC;
+        border-right: 1px solid #ECEDEF;
+    }
+    .dashboard-brand { padding: 0 2px 18px; gap: 9px; }
+    .brand-mark {
+        width: 28px; height: 28px; border-radius: 7px;
+        background: #1F2328; box-shadow: none;
+        font-size: 0.82rem; font-weight: 700;
+    }
+    .brand-name { font-size: 0.92rem; font-weight: 650; }
+    .brand-sub { font-size: 0.67rem; }
+
+    .st-key-nav_menu { gap: 2px; }
+    .st-key-nav_menu button {
+        min-height: 2.25rem;
+        border: 0;
+        border-radius: 7px;
+        padding: 0.3rem 0.65rem;
+        color: #59616C;
+        font-size: 0.82rem;
+        box-shadow: none;
+    }
+    .st-key-nav_menu button:hover { background: #F0F1F3; }
+    .st-key-nav_menu button[kind="primary"] {
+        background: #EFF1F4;
+        color: #24282E;
+        font-weight: 600;
+        box-shadow: none;
+    }
+    .st-key-week_picker { gap: 1px; }
+    .st-key-week_picker button {
+        min-height: 1.95rem;
+        padding: 0.15rem 0.5rem;
+        border: 0;
+        background: transparent;
+        color: #737B86;
+        font-size: 0.74rem;
+        box-shadow: none;
+    }
+    .st-key-week_picker button:hover {
+        background: #F1F2F4;
+        color: #24282E;
+    }
+    .st-key-week_picker button[kind="primary"] {
+        background: #ECEEF2;
+        color: #24282E;
+        font-weight: 600;
+    }
+    .section-title {
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: #7A818A;
+    }
+    .sidebar-foot { color: #949AA2; font-size: 0.68rem; }
+
+    .main-kicker {
+        font-size: 0.79rem;
+        color: #7A818A;
+        margin-bottom: 5px;
+    }
+    .dashboard-hero {
+        grid-template-columns: minmax(0, 1fr) 260px;
+        gap: 34px;
+        align-items: center;
+        padding: 4px 0 22px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #E8E9EB;
+    }
+    .hero-copy {
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+    .hero-date {
+        font-size: 1.58rem;
+        font-weight: 650;
+        letter-spacing: -0.025em;
+        margin: 3px 0 7px;
+    }
+    .hero-meta { font-size: 0.78rem; }
+    .hero-meta strong { color: #5E6670; font-weight: 600; }
+    .next-class {
+        padding: 1px 0 1px 22px;
+        border: 0;
+        border-left: 1px solid #E4E6E9;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+    .next-label { color: #8A9098; font-size: 0.69rem; margin-bottom: 0; }
+    .next-name { color: #2B3036; font-size: 0.9rem; font-weight: 600; margin-top: 7px; }
+    .next-meta { color: #7B828C; font-size: 0.7rem; margin-top: 5px; }
+
+    .panel {
+        padding: 18px 20px;
+        border: 1px solid #E7E8EA;
+        border-radius: 10px;
+        background: #FFFFFF;
+        box-shadow: none;
+    }
+    .panel-head { margin-bottom: 4px; }
+    .panel-title { font-size: 0.9rem; font-weight: 600; }
+    .panel-meta { font-size: 0.7rem; color: #8A9098; }
+    .course-row {
+        grid-template-columns: 52px 2px minmax(0, 1fr) auto;
+        gap: 12px;
+        padding: 13px 2px;
+        border-top: 1px solid #F0F1F2;
+    }
+    .course-line { width: 2px; height: 28px; }
+    .course-clock { font-size: 0.72rem; color: #7A818A; }
+    .course-clock strong { font-size: 0.75rem; color: #3D434B; font-weight: 600; }
+    .crow-name { font-size: 0.87rem; font-weight: 600; color: #2B3036; }
+    .crow-meta { font-size: 0.7rem; color: #8A9098; }
+    .crow-day { padding: 0; background: transparent; color: #8A9098; font-size: 0.7rem; }
+    .empty-card {
+        min-height: 120px;
+        padding: 20px;
+        border: 1px dashed #E4E6E9;
+        border-radius: 9px;
+        background: transparent;
+    }
+    .empty-icon { width: 28px; height: 28px; background: #F2F3F4; }
+    .empty-title { font-size: 0.81rem; color: #666D75; }
+    .empty-copy { font-size: 0.7rem; color: #979CA3; }
+
+    .notif-card, .link-card {
+        border: 1px solid #E7E8EA;
+        border-radius: 9px;
+        box-shadow: none;
+        background: #FFFFFF;
+    }
+    .notif-title { font-weight: 600; }
+    .link-card:hover { background: #FAFAFB; }
+    .muted-note { font-size: 0.78rem; color: #7A818A; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -651,7 +810,7 @@ def _next_course(courses: list, selected_week: int, now: datetime):
         if c.get("weekday") in WEEKDAYS_CN
         and WEEKDAYS_CN.index(c["weekday"]) > today_index
     ]
-    return later_week[0] if later_week else courses[0]
+    return later_week[0] if later_week else None
 
 
 def _course_time_parts(course: dict) -> tuple:
@@ -762,7 +921,7 @@ def _render_week_picker(selected_week: int) -> None:
             )
 
 
-def _course_card(c) -> str:
+def _course_card(c, show_day: bool = True) -> str:
     start, end = _course_time_parts(c)
     day_colors = {
         "周一": "#4D68D8", "周二": "#4EA6D8", "周三": "#8B5FD3",
@@ -774,6 +933,7 @@ def _course_card(c) -> str:
         if c.get("week_type", "每周") == "每周"
         else f"{c.get('start_week', 1)}–{c.get('end_week', TOTAL_WEEKS)} 周 · {c.get('week_type')}"
     )
+    day_html = f'<div class="crow-day">{c.get("weekday", "")}</div>' if show_day else ""
     return f"""
     <div class="course-row">
         <div class="course-clock"><strong>{start}</strong>{end}</div>
@@ -785,7 +945,7 @@ def _course_card(c) -> str:
             </div>
             <div class="crow-meta">{c.get('location', '地点待定')}　·　第 {c.get('periods', '?')} 节　·　{week_text}</div>
         </div>
-        <div class="crow-day">{c.get('weekday', '')}</div>
+        {day_html}
     </div>
     """
 
@@ -816,7 +976,7 @@ def _link_card(l) -> str:
 
 
 # ============================ 页面渲染 ============================
-def render_today_overview(uploaded_file, qwen_key: str):
+def render_today_overview(uploaded_file, qwen_key: str, view_mode: str = "today"):
     # ---- 课表截图导入流程（功能1） ----
     if uploaded_file is not None:
         st.markdown('<div class="section-title">课表截图导入</div>', unsafe_allow_html=True)
@@ -894,93 +1054,76 @@ def render_today_overview(uploaded_file, qwen_key: str):
     today = date.today()
     week, weekday = get_week_info(today)
 
+    all_courses = st.session_state["courses"]
     default_week = week or 1
-    st.session_state.setdefault("selected_week", default_week)
-    selected_week = int(st.session_state["selected_week"])
-    if selected_week not in CALENDAR:
+
+    if view_mode == "today":
         selected_week = default_week
-        st.session_state["selected_week"] = selected_week
+        courses = _courses_for_week(all_courses, selected_week)
+        courses = [course for course in courses if course.get("weekday") == weekday]
+        panel_title = f"今日课程 · {weekday}"
+        source_note = "今日无课" if not courses else f"{len(courses)} 项安排"
+    else:
+        st.session_state.setdefault("selected_week", default_week)
+        selected_week = int(st.session_state["selected_week"])
+        if selected_week not in CALENDAR:
+            selected_week = default_week
+            st.session_state["selected_week"] = selected_week
+        courses = _courses_for_week(all_courses, selected_week)
+        panel_title = f"第 {selected_week} 周课程"
+        source_note = "AI 解析导入" if all_courses != COURSES else "默认示例课表"
 
     _render_dashboard_header(today, week, weekday, selected_week)
 
-    quick_a, quick_b, quick_c = st.columns(3, gap="small")
-    with quick_a:
-        with st.container(key="quick_schedule"):
-            st.button(
-                "📚  周课表\n点击左侧教学周即可查看",
-                use_container_width=True,
-                on_click=_set_nav,
-                args=("today",),
-            )
-    with quick_b:
-        with st.container(key="quick_ai"):
-            st.button(
-                "✨  AI 行动简报\n过滤校园通知并生成提醒",
-                use_container_width=True,
-                on_click=_set_nav,
-                args=("ai",),
-            )
-    with quick_c:
-        with st.container(key="quick_links"):
-            st.button(
-                "🌐  校园服务\n教务、办事大厅与常用入口",
-                use_container_width=True,
-                on_click=_set_nav,
-                args=("links",),
-            )
-
-    all_courses = st.session_state["courses"]
-    courses = _courses_for_week(all_courses, selected_week)
-    source_note = "AI 解析导入" if all_courses != COURSES else "默认示例课表"
     if courses:
-        course_rows = "".join(_course_card(course) for course in courses)
+        course_rows = "".join(
+            _course_card(course, show_day=view_mode != "today") for course in courses
+        )
     else:
-        course_rows = """
+        empty_title = "今天没有课程" if view_mode == "today" else "这一周没有课程"
+        empty_copy = (
+            "可以在“课程与课表”中查看整周安排"
+            if view_mode == "today"
+            else "切换左侧其他教学周查看安排"
+        )
+        course_rows = f"""
             <div class="empty-card" style="margin-top:8px;">
                 <div><div class="empty-icon">✓</div>
-                <div class="empty-title">这一周没有课程</div>
-                <div class="empty-copy">切换左侧其他教学周查看安排</div></div>
+                <div class="empty-title">{empty_title}</div>
+                <div class="empty-copy">{empty_copy}</div></div>
             </div>
         """
 
-    week_rail, course_main = st.columns([2, 8], gap="medium")
-    with week_rail:
-        st.markdown(
-            '<div class="section-title" style="margin:6px 0 8px;">教学周</div>',
-            unsafe_allow_html=True,
-        )
-        _render_week_picker(selected_week)
-    with course_main:
+    if view_mode == "schedule":
+        week_rail, course_main = st.columns([2, 8], gap="medium")
+        with week_rail:
+            st.markdown(
+                '<div class="section-title" style="margin:6px 0 8px;">教学周</div>',
+                unsafe_allow_html=True,
+            )
+            _render_week_picker(selected_week)
+        with course_main:
+            st.markdown(
+                f"""
+                <div class="panel">
+                    <div class="panel-head">
+                        <div class="panel-title">{panel_title}　<span class="panel-meta">{len(courses)}</span></div>
+                        <div class="panel-meta">{source_note}</div>
+                    </div>
+                    {course_rows}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+    else:
         st.markdown(
             f"""
             <div class="panel">
                 <div class="panel-head">
-                    <div class="panel-title">第 {selected_week} 周课程　<span class="panel-meta">{len(courses)}</span></div>
+                    <div class="panel-title">{panel_title}　<span class="panel-meta">{len(courses)}</span></div>
                     <div class="panel-meta">{source_note}</div>
                 </div>
                 {course_rows}
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    bottom_a, bottom_b = st.columns(2, gap="medium")
-    with bottom_a:
-        st.markdown(
-            """
-            <div class="panel" style="min-height:150px;">
-                <div class="panel-head"><div class="panel-title">AI 行动简报</div><div class="panel-meta">6 条待处理</div></div>
-                <div class="muted-note">结合校历过滤校园通知，把「第 X 周」换算成明确截止日期。</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with bottom_b:
-        st.markdown(
-            """
-            <div class="panel" style="min-height:150px;">
-                <div class="panel-head"><div class="panel-title">校园服务</div><div class="panel-meta">快捷入口</div></div>
-                <div class="muted-note">教务处、办事大厅、图书馆和校园网服务都集中在这里。</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1073,10 +1216,11 @@ with st.sidebar:
 
     with st.container(key="nav_menu", gap="small"):
         for icon, label, view in [
-            ("🏠", "今日", "today"),
-            ("✨", "AI 行动简报", "ai"),
-            ("🌐", "网站导航", "links"),
-            ("⚙️", "设置与导入", "settings"),
+            ("⌂", "今日", "today"),
+            ("▤", "课程与课表", "schedule"),
+            ("◇", "AI 行动简报", "ai"),
+            ("◎", "网站导航", "links"),
+            ("⚙", "设置与导入", "settings"),
         ]:
             st.button(
                 f"{icon}　{label}",
@@ -1100,7 +1244,7 @@ with st.sidebar:
         )
 
     st.markdown(
-        '<div class="sidebar-foot">v0.3 · 千问 AI 解析</div>',
+        '<div class="sidebar-foot">本地预览</div>',
         unsafe_allow_html=True,
     )
 
@@ -1108,7 +1252,9 @@ qwen_key = _resolve_key(qwen_input, "DASHSCOPE_API_KEY")
 
 # ============================ 主界面 ============================
 if nav_view == "today":
-    render_today_overview(uploaded_file, qwen_key)
+    render_today_overview(uploaded_file, qwen_key, view_mode="today")
+elif nav_view == "schedule":
+    render_today_overview(uploaded_file, qwen_key, view_mode="schedule")
 elif nav_view == "ai":
     render_ai_briefing(qwen_key)
 elif nav_view == "links":
