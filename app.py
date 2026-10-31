@@ -117,7 +117,7 @@ LINKS = [
 # 千问（Qwen）· 阿里云百炼 DashScope：OpenAI 兼容，一个 Key 同时用于文本 + 视觉
 QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 QWEN_TEXT_MODEL = "qwen-plus"        # 文本：通知过滤
-QWEN_VISION_MODEL = "qwen-vl-plus"   # 视觉：课表截图识别
+QWEN_VISION_MODEL = "qwen3-vl-plus"   # 视觉：课表截图识别（旧 qwen-vl-plus 已于 2026-07 下线）
 
 # ============================ Prompt 模板 ============================
 SCHEDULE_VISION_PROMPT = """请识别这张课表截图，提取里面所有课程。对每门课提取：
