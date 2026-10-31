@@ -590,25 +590,60 @@ def _resolve_key(sidebar_val: str, key_name: str) -> str:
     return os.environ.get(key_name, "").strip()
 
 
+def _chat_completion(payload: dict, api_key: str, timeout: int = 120) -> dict:
+    """用 stdlib urllib 直接调 OpenAI 兼容接口（显式 UTF-8，规避 openai SDK/httpx 的中文编码 bug）。"""
+    import urllib.request
+    import urllib.error
+
+    url = QWEN_BASE_URL.rstrip("/") + "/chat/completions"
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "campus-dongda/1.0",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {e.code}: {detail}") from e
+
+
+def _message_text(message: dict) -> str:
+    """兼容 content 是 str 或 list（新版视觉模型可能返回分段数组）。"""
+    content = message.get("content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            c.get("text", "") for c in content if isinstance(c, dict) and isinstance(c.get("text"), str)
+        )
+    return ""
+
+
 @st.cache_data(show_spinner=False)
 def parse_schedule_image(image_bytes: bytes, mime_type: str, api_key: str) -> list:
     """功能1：调用视觉模型（Qwen-VL）识别课表截图，返回课程列表。"""
-    from openai import OpenAI
-
-    client = OpenAI(api_key=api_key, base_url=QWEN_BASE_URL)
     b64 = base64.b64encode(image_bytes).decode()
-    resp = client.chat.completions.create(
-        model=QWEN_VISION_MODEL,
-        messages=[{
+    payload = {
+        "model": QWEN_VISION_MODEL,
+        "messages": [{
             "role": "user",
             "content": [
                 {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64}"}},
                 {"type": "text", "text": SCHEDULE_VISION_PROMPT},
             ],
         }],
-        temperature=0.1,
-    )
-    content = resp.choices[0].message.content
+        "temperature": 0.1,
+    }
+    resp = _chat_completion(payload, api_key)
+    content = _message_text(resp["choices"][0]["message"])
     data = _extract_json(content)
     if isinstance(data, dict):
         data = data.get("courses", data.get("schedule", data))
@@ -621,9 +656,6 @@ def parse_schedule_image(image_bytes: bytes, mime_type: str, api_key: str) -> li
 @st.cache_data(show_spinner=False, ttl=3600)
 def filter_notices(notices: list, api_key: str) -> list:
     """功能2：调用千问（Qwen）过滤通知，结合校历把「第X周」换算成具体日期。"""
-    from openai import OpenAI
-
-    client = OpenAI(api_key=api_key, base_url=QWEN_BASE_URL)
     user_prompt = (
         "以下是本学年校历（周一为每周第一天）：\n"
         f"{_calendar_text()}\n\n"
@@ -631,16 +663,17 @@ def filter_notices(notices: list, api_key: str) -> list:
         f"{json.dumps(notices, ensure_ascii=False, indent=2)}\n\n"
         "请逐条分析并输出结果。"
     )
-    resp = client.chat.completions.create(
-        model=QWEN_TEXT_MODEL,
-        messages=[
+    payload = {
+        "model": QWEN_TEXT_MODEL,
+        "messages": [
             {"role": "system", "content": NOTICE_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=0.1,
-        response_format={"type": "json_object"},
-    )
-    content = resp.choices[0].message.content
+        "temperature": 0.1,
+        "response_format": {"type": "json_object"},
+    }
+    resp = _chat_completion(payload, api_key)
+    content = _message_text(resp["choices"][0]["message"])
     data = _extract_json(content)
     if isinstance(data, list):
         return data
